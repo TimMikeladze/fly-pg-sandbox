@@ -1,0 +1,24 @@
+services:
+  db:
+    build: .
+    container_name: postgres-local
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: testdb
+      PGDATA: /var/lib/postgresql/data/pgdata
+      FLY_VM_MEMORY_MB: "256"
+    ports:
+      - "6432:6432"
+      - "54320:5432"  # remapped to avoid conflicts with local postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost", "-p", "6432"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

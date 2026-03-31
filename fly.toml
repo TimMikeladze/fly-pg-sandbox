@@ -1,0 +1,41 @@
+app = "REPLACE_ME"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[vm]
+  size = "shared-cpu-1x"
+  memory = 256
+
+[env]
+  POSTGRES_USER = "postgres"
+  POSTGRES_DB = "testdb"
+  PGDATA = "/var/lib/postgresql/data/pgdata"
+  FLY_VM_MEMORY_MB = "256"
+
+[mounts]
+  source = "pg_data"
+  destination = "/var/lib/postgresql/data"
+
+[checks]
+  [checks.pgbouncer]
+    port = 6432
+    type = "tcp"
+    interval = "15s"
+    timeout = "2s"
+
+[[services]]
+  internal_port = 6432
+  protocol = "tcp"
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[services.ports]]
+    port = 5432
+
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 100
+    soft_limit = 80
