@@ -1,4 +1,4 @@
-app = "REPLACE_ME"
+app = "pg-sandbox-vy6e38"
 primary_region = "sjc"
 
 [build]
@@ -6,13 +6,16 @@ primary_region = "sjc"
 
 [vm]
   size = "shared-cpu-1x"
-  memory = 256
+  memory = 1024
 
 [env]
   POSTGRES_USER = "postgres"
   POSTGRES_DB = "testdb"
   PGDATA = "/var/lib/postgresql/data/pgdata"
-  FLY_VM_MEMORY_MB = "256"
+  # Must be kept in step with [vm] memory above — entrypoint.sh sizes every
+  # PostgreSQL and PgBouncer setting off this number, so leaving it behind means
+  # the server tunes itself for a machine it isn't running on.
+  FLY_VM_MEMORY_MB = "1024"
 
 [mounts]
   source = "pg_data"

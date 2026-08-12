@@ -7,13 +7,13 @@ services:
       POSTGRES_PASSWORD: localdev
       POSTGRES_DB: testdb
       PGDATA: /var/lib/postgresql/data/pgdata
-      FLY_VM_MEMORY_MB: "256"
+      FLY_VM_MEMORY_MB: "1024"
     ports:
       - "6432:6432"
       - "54320:5432"  # remapped to avoid conflicts with local postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    mem_limit: 256m
+    mem_limit: 1024m
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost", "-p", "6432"]
       interval: 10s

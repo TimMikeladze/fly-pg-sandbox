@@ -67,7 +67,17 @@ fi
 
 PGB_POOL=$(clamp 2 $((PG_MAX_CONN / 3)) 50)
 PGB_RESERVE=$(clamp 1 $((PGB_POOL / 2)) 5)
-PGB_MIN_POOL=1
+# Keep no idle server connections per pool.
+#
+# PgBouncer's limits are per (user, database) pair but PostgreSQL's
+# max_connections is global, and this box hosts a database per project. A
+# min_pool_size above zero means every database that has ever been touched pins
+# that many server connections open forever, so the global budget drains to
+# nothing without a single query running — with a dozen sandbox databases that
+# was enough on its own to hand out `53300 sorry, too many clients already`.
+# At zero, an idle pool releases after server_idle_timeout and reopens on demand;
+# the cost is one connection setup on the first query after a quiet minute.
+PGB_MIN_POOL=0
 PGB_MAX_DB=$(clamp 5 $((PG_MAX_CONN * 2 / 3)) 200)
 PGB_MAX_CLIENT=$(clamp 50 $((PG_MAX_CONN * 8)) 1000)
 

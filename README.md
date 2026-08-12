@@ -124,7 +124,7 @@ All Fly.io commands check that `flyctl` is installed and exit with an install li
 ### Start
 
 ```bash
-make up      # build and start (256MB memory limit)
+make up      # build and start (1024MB memory limit)
 make test    # verify postgres, pgbouncer, extensions, helper functions
 make psql    # connect via pgbouncer (port 6432)
 ```
@@ -499,8 +499,22 @@ PgBouncer pool sizes scale proportionally with `max_connections`:
 |---------------------|---------|
 | `default_pool_size` | max_connections / 3 |
 | `reserve_pool_size` | pool / 2 (1-5) |
+| `min_pool_size` | 0 (see below) |
 | `max_db_connections` | max_connections * 2/3 |
 | `max_client_conn` | max_connections * 8 (max 1000) |
+
+> **Running many databases on one box?** Every PgBouncer limit above is applied
+> *per (user, database) pair*, but `max_connections` is a single global budget for
+> the server. Those two facts do not compose: with `default_pool_size = 21`, only
+> four databases busy at the same time can ask for 84 backends against a global
+> ceiling of 64, and the losers get `FATAL 53300 sorry, too many clients already`.
+>
+> `min_pool_size` is kept at 0 for the same reason — at any higher value, every
+> database that has ever been connected to pins that many backends open forever,
+> draining the global budget with no query running anywhere.
+>
+> If you host a database per project, size the machine for the number of databases
+> you expect to be active *at once*, not for the number that exist.
 
 ### Reference: 256MB Memory Budget
 
