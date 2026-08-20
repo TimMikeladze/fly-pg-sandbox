@@ -118,11 +118,27 @@ max_db_connections = ${PGB_MAX_DB}
 
 ; Timeouts
 server_idle_timeout = 60
-client_idle_timeout = 0
-client_login_timeout = 60
+; Reap pooled client connections that have gone quiet. Serverless runtimes keep
+; sockets open between invocations, so without this a client that was frozen or
+; torn down mid-connection leaves its half open here indefinitely.
+client_idle_timeout = 600
+; A client that connects and never finishes logging in is wedged, not slow. The
+; 60s default pins the slot for a minute per attempt, which a retrying
+; serverless caller turns into a pile of dead connections in seconds.
+client_login_timeout = 15
 query_timeout = 0
 query_wait_timeout = 120
 server_connect_timeout = 15
+
+; Notice peers that vanished without sending a FIN — the Fly proxy dropping its
+; backhaul, or a machine stop, both look like a live socket to the kernel until
+; something probes it. The OS default only starts probing after ~2 hours, which
+; is long enough for every client pool to fill with corpses. This detects a dead
+; peer in roughly 60 + 15*3 seconds instead.
+tcp_keepalive = 1
+tcp_keepidle = 60
+tcp_keepintvl = 15
+tcp_keepcnt = 3
 
 ; Low memory settings
 pkt_buf = 4096
@@ -216,10 +232,50 @@ echo "Starting PgBouncer..."
 su-exec postgres /usr/bin/pgbouncer /etc/pgbouncer/pgbouncer.ini &
 PGBOUNCER_PID=$!
 
+# --- Watchdog ---
+#
+# fly.toml checks can only be tcp or http, and a TCP connect to 6432 proves
+# nothing beyond "the port is bound". The failure worth catching is a pooler
+# that accepts the socket and then never answers the startup packet, which a
+# port check reports as healthy while every client hangs.
+#
+# So probe it the way a client does and, if it stops answering, kill PgBouncer.
+# That drops through to the wait below and exits the container, and Fly restarts
+# the machine. Three consecutive failures are required so a single slow probe
+# under load does not cycle a healthy database.
+(
+    # Give PgBouncer a moment to bind before the first probe counts.
+    for _ in $(seq 1 20); do
+        /healthcheck.sh 2>/dev/null && break
+        sleep 1
+    done
+
+    failures=0
+    while sleep 15; do
+        if /healthcheck.sh 2>/dev/null; then
+            failures=0
+            continue
+        fi
+        failures=$((failures + 1))
+        echo "Health probe failed (${failures}/3)."
+        if [ "$failures" -ge 3 ]; then
+            echo "PgBouncer stopped answering; exiting so Fly restarts the machine."
+            # SIGKILL after a grace period: a wedged or stopped process never
+            # acts on SIGTERM, and leaving it alive is the state being escaped.
+            kill -TERM "$PGBOUNCER_PID" 2>/dev/null
+            sleep 5
+            kill -KILL "$PGBOUNCER_PID" 2>/dev/null
+            exit 1
+        fi
+    done
+) &
+WATCHDOG_PID=$!
+
 # Wait for either process to exit
 wait -n $PG_PID $PGBOUNCER_PID
 EXIT_CODE=$?
 
+kill $WATCHDOG_PID 2>/dev/null
 kill $PG_PID $PGBOUNCER_PID 2>/dev/null
 wait $PG_PID $PGBOUNCER_PID 2>/dev/null
 exit $EXIT_CODE

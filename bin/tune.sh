@@ -120,6 +120,14 @@ apply_settings() {
     # fly.toml: [vm] memory + [env] FLY_VM_MEMORY_MB
     sed -i.bak "/^\[vm\]/,/^\[/ s/memory = .*/memory = $mem/" fly.toml
     sed -i.bak "s/FLY_VM_MEMORY_MB = .*/FLY_VM_MEMORY_MB = \"$mem\"/" fly.toml
+
+    # fly.toml: [services.concurrency] tracks PgBouncer's client limit, which
+    # entrypoint.sh derives from the same memory figure. Fly sheds load at
+    # hard_limit, so leaving it behind would refuse connections the pooler is
+    # willing to serve.
+    compute "$mem"
+    sed -i.bak "s/hard_limit = .*/hard_limit = $mx/" fly.toml
+    sed -i.bak "s/soft_limit = .*/soft_limit = $((mx * 4 / 5))/" fly.toml
     rm -f fly.toml.bak
 
     # docker-compose.yml: FLY_VM_MEMORY_MB + mem_limit
@@ -128,7 +136,7 @@ apply_settings() {
     rm -f docker-compose.yml.bak
 
     echo "Updated:"
-    echo "  fly.toml           → memory = $mem, FLY_VM_MEMORY_MB = \"$mem\""
+    echo "  fly.toml           → memory = $mem, FLY_VM_MEMORY_MB = \"$mem\", hard_limit = $mx"
     echo "  docker-compose.yml → FLY_VM_MEMORY_MB = \"$mem\", mem_limit = ${mem}m"
     echo ""
     echo "Next steps:"

@@ -291,14 +291,52 @@ Volumes can be extended later with `fly volumes extend <id> --size <gb>`, but ca
 
 ### Auto-Stop / Auto-Start
 
-The machine automatically stops when there are no TCP connections (saves cost) and wakes up when a new connection arrives. First connection after cold start takes a few seconds.
-
-This is configured in `fly.toml`:
+The machine stays running. `fly.toml`:
 ```toml
-auto_stop_machines = "stop"
+auto_stop_machines = "off"
 auto_start_machines = true
-min_machines_running = 0
+min_machines_running = 1
 ```
+
+Stopping on idle looks like free money and is not, once anything serverless
+connects. Vercel Functions, Lambda and friends keep pooled TCP connections alive
+between invocations. When the machine stops, Fly tears out the proxy backhaul
+and no FIN ever reaches the client, so the pool keeps handing out sockets that
+are already dead — every query on one hangs until the client's own timeout
+fires. A warm instance stays poisoned until it recycles, which turns a few
+seconds of "cold start" into a multi-minute outage downstream, long after the
+machine is back up. Keeping one machine running costs roughly $2/month and
+removes the entire failure mode.
+
+If nothing serverless connects and you want the savings back, set
+`auto_stop_machines = "stop"` and `min_machines_running = 0`.
+
+### Staying Reachable
+
+Three settings exist specifically to stop dead connections from accumulating:
+
+| Setting | Value | Why |
+|---------|-------|-----|
+| `tcp_keepidle` / `tcp_keepintvl` / `tcp_keepcnt` | 60 / 15 / 3 | Detects a peer that vanished without a FIN in ~2 minutes. The OS default waits ~2 hours, long enough for every client pool to fill with corpses. |
+| `client_login_timeout` | 15s | A client that connects and never finishes logging in is wedged, not slow. The 60s default pins the slot for a minute per attempt, and a retrying serverless caller turns that into a pile of dead connections in seconds. |
+| `client_idle_timeout` | 600s | Reaps pooled connections that have gone quiet, so a frozen or torn-down client cannot leave its half open forever. Clients reconnect transparently. |
+
+### Health Checks
+
+Fly's `fly.toml` checks only speak `tcp` and `http`. A TCP connect to 6432 goes
+green the moment PgBouncer binds the port, which misses the failure that
+actually matters: a pooler that accepts the socket and then never answers the
+startup packet. That reads as healthy while every client hangs.
+
+So `healthcheck.sh` probes with `pg_isready` — a real startup packet, no
+password needed, since a server answering "authentication required" is a server
+that is answering. `entrypoint.sh` runs it every 15 seconds and, after three
+consecutive failures, kills PgBouncer so the container exits and Fly restarts
+the machine. The TCP check in `fly.toml` stays on as a liveness floor.
+
+This runs inside the machine, so it catches a wedged pooler. It cannot see a
+broken Fly proxy path between an edge and this machine — nothing in the
+container can.
 
 ### Connecting
 

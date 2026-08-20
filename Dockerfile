@@ -9,9 +9,10 @@ RUN mkdir -p /etc/pgbouncer /var/log/pgbouncer /var/run/pgbouncer \
 
 # Copy config files (pgbouncer.ini is generated at runtime by entrypoint.sh)
 COPY entrypoint.sh /entrypoint.sh
+COPY healthcheck.sh /healthcheck.sh
 COPY init.sql /docker-entrypoint-initdb.d/init.sql
 
-RUN chmod +x /entrypoint.sh
+RUN chmod +x /entrypoint.sh /healthcheck.sh
 
 EXPOSE 5432 6432
 

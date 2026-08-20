@@ -21,6 +21,12 @@ primary_region = "sjc"
   source = "pg_data"
   destination = "/var/lib/postgresql/data"
 
+# Fly's top-level checks only speak tcp and http, and a TCP connect to 6432
+# succeeds the moment PgBouncer binds the port — it stays green even when the
+# pooler accepts a socket and then never answers the startup packet. This check
+# is therefore only a liveness floor; the real probe is the watchdog in
+# entrypoint.sh, which runs healthcheck.sh and exits the container when the
+# pooler stops answering, so Fly restarts it.
 [checks]
   [checks.pgbouncer]
     port = 6432
@@ -31,14 +37,24 @@ primary_region = "sjc"
 [[services]]
   internal_port = 6432
   protocol = "tcp"
-  auto_stop_machines = "stop"
+  # Never stop this machine. Serverless clients (Vercel Functions and friends)
+  # keep pooled TCP connections alive between invocations, and a stop tears the
+  # proxy backhaul out from under them without a FIN ever reaching the client —
+  # the pool then hands out sockets that are already dead and every query hangs
+  # until the client's own timeout fires. Warm instances stay poisoned until
+  # they recycle, so an idle stop reads downstream as a multi-minute outage.
+  auto_stop_machines = "off"
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
 
   [[services.ports]]
     port = 5432
 
+  # Tracks PgBouncer's max_client_conn, which entrypoint.sh derives from
+  # FLY_VM_MEMORY_MB (512 at 1GB). Fly sheds load at hard_limit, so a lower
+  # number here would refuse connections the pooler is willing to serve.
+  # bin/tune.sh keeps both in step when the memory size changes.
   [services.concurrency]
     type = "connections"
-    hard_limit = 100
-    soft_limit = 80
+    hard_limit = 512
+    soft_limit = 400
