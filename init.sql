@@ -13,6 +13,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS unaccent;
 CREATE EXTENSION IF NOT EXISTS fuzzystrmatch;
 CREATE EXTENSION IF NOT EXISTS pgstattuple;
+CREATE EXTENSION IF NOT EXISTS vector;
 
 -- =============================================================================
 -- DATABASE MANAGEMENT HELPERS
@@ -43,7 +44,8 @@ BEGIN
          CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
          CREATE EXTENSION IF NOT EXISTS unaccent;
          CREATE EXTENSION IF NOT EXISTS fuzzystrmatch;
-         CREATE EXTENSION IF NOT EXISTS pgstattuple;'
+         CREATE EXTENSION IF NOT EXISTS pgstattuple;
+         CREATE EXTENSION IF NOT EXISTS vector;'
     );
 
     -- Install helper functions in the new database

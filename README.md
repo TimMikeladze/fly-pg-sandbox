@@ -34,7 +34,7 @@ make help         # show all commands
 │  │  PgBouncer  │─────────────▶│      PostgreSQL 16     │   │
 │  │  :6432      │  unix socket │      :5432             │   │
 │  │             │              │                        │   │
-│  │ auto-tuned  │              │ 13 extensions          │   │
+│  │ auto-tuned  │              │ 14 extensions          │   │
 │  │ pool sizes  │              │ SCRAM-SHA-256 auth     │   │
 │  └─────────────┘              │ auto-tuned settings    │   │
 │        ▲                      └────────────────────────┘   │
@@ -87,7 +87,7 @@ fly-pg-sandbox/
 | `make logs` | Tail docker compose container logs |
 | `make status` | Show container status and count of active Postgres connections |
 | `make shell` | Open a shell inside the container |
-| `make create-db name=X` | Create a new database with all 13 extensions + helper functions |
+| `make create-db name=X` | Create a new database with all 14 extensions + helper functions |
 | `make drop-db name=X` | Drop a database (terminates active connections first) |
 | `make build` | Build the Docker image without starting it |
 | `make tune` | Preview auto-tuned PG settings for all memory tiers (see [Tuning](#tuning)) |
@@ -132,7 +132,7 @@ make psql    # connect via pgbouncer (port 6432)
 ### Manage Databases
 
 ```bash
-# Create (installs all 13 extensions + helper functions)
+# Create (installs all 14 extensions + helper functions)
 make create-db name=myapp
 make create-db name=staging
 
@@ -413,7 +413,7 @@ fly logs                  # tail logs
 
 ## Extensions
 
-All 13 extensions are installed automatically on the default database and on any database created with `make create-db` or `SELECT create_db('name')`.
+All 14 extensions are installed automatically on the default database and on any database created with `make create-db` or `SELECT create_db('name')`.
 
 | Extension | Purpose | Example |
 |-----------|---------|---------|
@@ -428,6 +428,7 @@ All 13 extensions are installed automatically on the default database and on any
 | `unaccent` | Accent-insensitive search | `SELECT unaccent('cafe');` |
 | `fuzzystrmatch` | Phonetic matching | `SELECT soundex('smith'), soundex('smyth');` |
 | `pgstattuple` | Table bloat analysis | `SELECT * FROM pgstattuple('tablename');` |
+| `vector` (pgvector 0.8.0) | Vector similarity search (HNSW/IVFFlat) | `CREATE TABLE t (emb vector(1536)); SELECT * FROM t ORDER BY emb <=> '[...]' LIMIT 5;` |
 | `dblink` | Cross-database queries | Used by `create_db()` helper |
 | `plpgsql` | PL/pgSQL language | Procedural language (always installed) |
 
